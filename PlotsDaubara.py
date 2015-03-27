@@ -1,6 +1,8 @@
 # -*- coding: UTF-8 -*-
-from __main__ import qt, ctk, slicer
+from __main__ import qt, slicer
 import os
+import math
+import vtk
 
 class PlotsDaubara:
     def __init__(self, parent):
@@ -28,6 +30,10 @@ class PlotsDaubaraWidget:
         self.StatusModifiedEvent = slicer.vtkMRMLCommandLineModuleNode()\
         .StatusModifiedEvent
         self.Observations = []
+
+        self.inc = 0.1
+        self.seg = 0
+        self.cnt = 0
 
     def setup(self):
         self.logic = PlotsDaubaraLogic()
@@ -62,12 +68,9 @@ class PlotsDaubaraWidget:
 
     def plotSine(self):
 
-        import vtk
-        import math
-
         #chart = vtk.vtkChartXY()
-        chart = self.chartView.chart()
-        chart.SetShowLegend(False)
+        self.chart = self.chartView.chart()
+        self.chart.SetShowLegend(False)
 
         #line.SetMarkerStyle(vtk.vtkPlotPoints.CROSS)
         #pl = vtk.vtkPlotLine()
@@ -93,16 +96,42 @@ class PlotsDaubaraWidget:
             self.table.SetValue(i, 0, i * inc)
             self.table.SetValue(i, 1, math.sin(i * inc))
 
-        line = chart.AddPlot(vtk.vtkChart.LINE)
+        self.line = self.chart.AddPlot(vtk.vtkChart.LINE)
         #line = vtk.vtkPlotLine()
-        line.SetInput(self.table, 0, 1)
-        line.SetColor(0, 0, 0, 255)
-        line.SetWidth(1.0)
+        self.line.SetInput(self.table, 0, 1)
+        self.line.SetColor(0, 0, 0, 255)
+        self.line.SetWidth(1.0)
         # cambiar el legend de los ejes
-        line.GetXAxis().SetTitle("tiempo (ms)")
-        line.GetYAxis().SetTitle("Amplitud")
+        self.line.GetXAxis().SetTitle("Tiempo (s)")
+        self.line.GetYAxis().SetTitle("Amplitud")
         #line.Update()
-        self.chartView.addPlot(line)
+        self.chartView.addPlot(self.line)
+
+        self.setupTimer()
+
+    def setupTimer(self):
+        self.timer = qt.QTimer()
+        self.timer.timeout.connect(self.plotwithTimer)
+        self.timer.setInterval(self.inc * 1000)
+        self.timer.start()
+
+    def plotwithTimer(self):
+        self.chart.RemovePlot(0)
+
+        # aumenta el contador
+        self.cnt += 1
+        # se redimensiona la tabla
+        self.table.SetNumberOfRows(self.cnt)
+        for i in range(0, self.cnt):
+            self.table.SetValue(i, 0, i * self.inc)
+            self.table.SetValue(i, 1, 5 * math.sin(i * self.inc))
+        if self.cnt > 1:
+            line = self.chart.AddPlot(0)
+            line.SetInput(self.table, 0, 1)
+
+        if self.cnt == 100:
+            self.cnt = 0
+
 
 
 ### === Metodos convenientes para leer los widgets === ###
@@ -119,7 +148,7 @@ class PlotsDaubaraWidget:
                     return resulting_widget
             return None
 
-class  PlotsDaubaraLogic:
+class PlotsDaubaraLogic:
     def __ini__():
         pass
 
