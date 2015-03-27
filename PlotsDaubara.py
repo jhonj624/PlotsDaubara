@@ -25,7 +25,8 @@ class PlotsDaubaraWidget:
         #banderas
 
         # Variables globales
-        self.StatusModifiedEvent = slicer.vtkMRMLCommandLineModuleNode().StatusModifiedEvent
+        self.StatusModifiedEvent = slicer.vtkMRMLCommandLineModuleNode()\
+        .StatusModifiedEvent
         self.Observations = []
 
     def setup(self):
@@ -33,9 +34,13 @@ class PlotsDaubaraWidget:
         # configuración de la interfaz gráfica
         loader = qt.QUiLoader()
         moduleName = 'PlotsDaubara'
-        scriptedModulesPath = eval('slicer.modules.%s.path' % moduleName.lower())# devuelve la ruta del .py
-        scriptedModulesPath = os.path.dirname(scriptedModulesPath)# lleva a la carpeta del modulo
-        path = os.path.join(scriptedModulesPath, 'Resources', 'UI', 'PlotsDaubara.ui')# devuelve la ruta del moduloName.ui
+        # devuelve la ruta del .py
+        scriptedModulesPath = \
+        eval('slicer.modules.%s.path' % moduleName.lower())
+        # lleva a la carpeta del modulo
+        scriptedModulesPath = os.path.dirname(scriptedModulesPath)
+        # devuelve la ruta del moduloName.ui
+        path = os.path.join(scriptedModulesPath, 'Resources', 'UI', 'PlotsDaubara.ui')
 
         qfile = qt.QFile(path)
         qfile.open(qt.QFile.ReadOnly)
@@ -50,54 +55,54 @@ class PlotsDaubaraWidget:
         #Obterner Botones
         self.label = self.get("label")
         self.chartView = self.get("ChartView")
-        self.label.setText("Modulo de arranque")
+        self.label.setText(u"Modulo para visualización de señales")
 
         self.plotSine()
+        #self.setupChartView()
 
     def plotSine(self):
 
         import vtk
         import math
 
+        #chart = vtk.vtkChartXY()
+        chart = self.chartView.chart()
+        chart.SetShowLegend(False)
+
+        #line.SetMarkerStyle(vtk.vtkPlotPoints.CROSS)
+        #pl = vtk.vtkPlotLine()
+        #self.chartView.addPlot(pl)
         # create a table with some points in it
-        table = vtk.vtkTable()
+        self.table = vtk.vtkTable()
 
         arrX = vtk.vtkFloatArray()
-        arrX.SetName('Tiempo')
+        arrX.SetName('x')
 
         arrS = vtk.vtkFloatArray()
         arrS.SetName('Sine')
 
-        table.AddColumn(arrS)
-        table.AddColumn(arrX)
+        self.table.AddColumn(arrS)
+        self.table.AddColumn(arrX)
 
         # fill the table with some example values
         numPoints = 100
 
         inc = 7.5 / (numPoints - 1)
-        table.SetNumberOfRows(numPoints)
+        self.table.SetNumberOfRows(numPoints)
         for i in range(0, numPoints):
-            table.SetValue(i, 0, i * inc)
-            table.SetValue(i, 1, math.sin(i * inc))
-
-        chart = vtk.vtkChartXY()
-        chart.SetShowLegend(True)
+            self.table.SetValue(i, 0, i * inc)
+            self.table.SetValue(i, 1, math.sin(i * inc))
 
         line = chart.AddPlot(vtk.vtkChart.LINE)
         #line = vtk.vtkPlotLine()
-        line.SetInput(table, 0, 1)
+        line.SetInput(self.table, 0, 1)
         line.SetColor(0, 0, 0, 255)
         line.SetWidth(1.0)
-        #line.SetMarkerStyle(vtk.vtkPlotPoints.CROSS)
-        #pl = vtk.vtkPlotLine()
-        #self.chartView.addPlot(pl)
-
         # cambiar el legend de los ejes
         line.GetXAxis().SetTitle("tiempo (ms)")
         line.GetYAxis().SetTitle("Amplitud")
-        line.Update()
+        #line.Update()
         self.chartView.addPlot(line)
-        #self.chartView.update()
 
 
 ### === Metodos convenientes para leer los widgets === ###
@@ -114,7 +119,7 @@ class PlotsDaubaraWidget:
                     return resulting_widget
             return None
 
-class PlotsDaubaraLogic:
+class  PlotsDaubaraLogic:
     def __ini__():
         pass
 
