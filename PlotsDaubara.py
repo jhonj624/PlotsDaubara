@@ -3,6 +3,8 @@ from __main__ import qt, slicer
 import os
 import math
 import vtk
+import json
+import numpy
 
 class PlotsDaubara:
     def __init__(self, parent):
@@ -44,9 +46,9 @@ class PlotsDaubaraWidget:
         scriptedModulesPath = \
         eval('slicer.modules.%s.path' % moduleName.lower())
         # lleva a la carpeta del modulo
-        scriptedModulesPath = os.path.dirname(scriptedModulesPath)
+        self.scriptedModulesPath = os.path.dirname(scriptedModulesPath)
         # devuelve la ruta del moduloName.ui
-        path = os.path.join(scriptedModulesPath, 'Resources', 'UI', 'PlotsDaubara.ui')
+        path = os.path.join(self.scriptedModulesPath, 'Resources', 'UI', 'PlotsDaubara.ui')
 
         qfile = qt.QFile(path)
         qfile.open(qt.QFile.ReadOnly)
@@ -61,6 +63,7 @@ class PlotsDaubaraWidget:
         #Obterner Botones
         self.label = self.get("label")
         self.chartView = self.get("ChartView")
+        self.chartView.title = 'Señal EEG'
         self.label.setText(u"Modulo para visualización de señales")
 
         self.plotSine()
@@ -87,14 +90,61 @@ class PlotsDaubaraWidget:
         self.table.AddColumn(arrS)
         self.table.AddColumn(arrX)
 
-        # fill the table with some example values
-        numPoints = 100
+        # cargar los coeficientes
+        fileJson = os.path.join(self.scriptedModulesPath,'Datos','Coeficientes','coeff_ar.json')
+        #nombreJson = "/home/jhon/Dropbox/Trabajo_GIBIC/SimuladorNeuroFuncional/SignalsEEG/coeff_ar.json"
+        os.path.exists(fileJson)
 
-        inc = 7.5 / (numPoints - 1)
+        jsonData = open(fileJson)
+        data = json.load(jsonData)
+        jsonData.close()
+
+        ECR1_clean = data['Clean_ECR1'] # Tamaño 129x24.
+
+
+        canal = 58  # Cambiar canal. El numero del canal a simular y graficar es (canal+1), los indices comienzan en cero.
+
+        channel = ECR1_clean[canal][:]
+        print ("valores del canal")
+        print(channel)
+
+        cont = 0
+        ch = []
+        for j in channel:
+            if not numpy.isnan(j):
+                ch.insert( cont, j)
+                cont = cont + 1
+        # Convierte lista a numpy array.
+        self.ch = numpy.array(ch)
+
+
+
+        # Simulación señal EEG.
+        numPoints = 1001
+
+        # Vector de ruido (White Noise)
+        # Longitud señal 201 datos.
+        self.VectorNoise = math.sqrt(ch[2])*numpy.random.normal(0.0, 1.0, numPoints)
+        #VectorNoise = numpy.random.normal(0, 1.0, 201)
+
+        self.sim_senal = range(numPoints)     # 1000 datos son 10 seg. original 201
+        self.coeff = ch[4:]
+
+        # fill the table with some example values
+
+        self.inc = 10.0 / (numPoints - 1)
         self.table.SetNumberOfRows(numPoints)
-        for i in range(0, numPoints):
-            self.table.SetValue(i, 0, i * inc)
-            self.table.SetValue(i, 1, math.sin(i * inc))
+        for k in range(0, numPoints):
+            sim = 0
+            for i in (range(self.ch[1].astype(numpy.int64))):
+                if (k > i):
+                    sim = sim - (self.coeff[i]*self.sim_senal[k-i-1])
+            self.sim_senal[k] = sim + self.VectorNoise[k]
+
+            self.table.SetValue(k, 0, k * self.inc)
+            self.table.SetValue(k, 1, self.sim_senal[k])
+            #print (k*inc)
+            #print (sim_senal[k])
 
         self.line = self.chart.AddPlot(vtk.vtkChart.LINE)
         #line = vtk.vtkPlotLine()
@@ -112,7 +162,7 @@ class PlotsDaubaraWidget:
     def setupTimer(self):
         self.timer = qt.QTimer()
         self.timer.timeout.connect(self.plotwithTimer)
-        self.timer.setInterval(self.inc * 1000)
+        self.timer.setInterval(self.inc)
         self.timer.start()
 
     def plotwithTimer(self):
@@ -120,16 +170,26 @@ class PlotsDaubaraWidget:
 
         # aumenta el contador
         self.cnt += 1
+        # eliminamos el primer valor del vector
+        self.sim_senal = self.sim_senal[1:]
+        # agremos un valor nuevo al final
+        sim = 0
+        for i in (range(self.ch[1].astype(numpy.int64))):
+            if (self.cnt > i):
+                sim = sim - (self.coeff[i] * self.sim_senal[self.cnt - i - 1])
+                sim = 15 if (sim > 15) else (-15 if sim < - 15 else sim)
+        self.sim_senal.append(sim + self.VectorNoise[self.cnt])
+
         # se redimensiona la tabla
-        self.table.SetNumberOfRows(self.cnt)
-        for i in range(0, self.cnt):
+
+        for i in range(0, 1001):
             self.table.SetValue(i, 0, i * self.inc)
-            self.table.SetValue(i, 1, 5 * math.sin(i * self.inc))
+            self.table.SetValue(i, 1, self.sim_senal[i])
         if self.cnt > 1:
             line = self.chart.AddPlot(0)
             line.SetInput(self.table, 0, 1)
 
-        if self.cnt == 100:
+        if self.cnt == 1000:
             self.cnt = 0
 
 
