@@ -65,8 +65,10 @@ class PlotsDaubaraWidget:
         self.chartView = self.get("ChartView")
         self.chartView.title = 'Señal EEG'
         self.label.setText(u"Modulo para visualización de señales")
-
+        self.chartViewSEEG = self.get("cv_seeg")
+        self.chartViewSEEG.title = 'SEEG'
         self.plotSine()
+        self.plotSEEG()
         #self.setupChartView()
 
     def plotSine(self):
@@ -100,8 +102,7 @@ class PlotsDaubaraWidget:
         jsonData.close()
 
         ECR1_clean = data['Clean_ECR1'] # Tamaño 129x24.
-
-
+        
         canal = 58  # Cambiar canal. El numero del canal a simular y graficar es (canal+1), los indices comienzan en cero.
 
         channel = ECR1_clean[canal][:]
@@ -116,9 +117,6 @@ class PlotsDaubaraWidget:
                 cont = cont + 1
         # Convierte lista a numpy array.
         self.ch = numpy.array(ch)
-
-
-
         # Simulación señal EEG.
         numPoints = 1001
 
@@ -150,7 +148,7 @@ class PlotsDaubaraWidget:
         #line = vtk.vtkPlotLine()
         self.line.SetInput(self.table, 0, 1)
         self.line.SetColor(0, 0, 0, 255)
-        self.line.SetWidth(1.0)
+        self.line.SetWidth(0.3)
         # cambiar el legend de los ejes
         self.line.GetXAxis().SetTitle("Tiempo (s)")
         self.line.GetYAxis().SetTitle("Amplitud")
@@ -158,7 +156,51 @@ class PlotsDaubaraWidget:
         self.chartView.addPlot(self.line)
 
         self.setupTimer()
-
+        
+    def plotSEEG(self):
+        
+        #chart = vtk.vtkChartXY()
+        self.chartSEEG = self.chartViewSEEG.chart()
+        self.chartSEEG.SetShowLegend(False)
+        
+        #line.SetMarkerStyle(vtk.vtkPlotPoints.CROSS)
+        #pl = vtk.vtkPlotLine()
+        #self.chartView.addPlot(pl)
+        # create a table with some points in it
+        self.tableSEEG = vtk.vtkTable()
+        
+        arrX = vtk.vtkFloatArray()
+        arrX.SetName('x')
+        
+        arrS = vtk.vtkFloatArray()
+        arrS.SetName('SEEG')
+        
+        self.tableSEEG.AddColumn(arrS)
+        self.tableSEEG.AddColumn(arrX)
+        
+        # Simulación señal EEG.
+        a,b = self.leerCoeficientes()
+        signalSEEG, tiempo = self.simularTotal(a,b,10,[0])
+        y = len(signalSEEG)
+        x = len(tiempo)
+        print (y,x)
+        self.tableSEEG.SetNumberOfRows(y)
+        for k in range(0,y):
+            self.tableSEEG.SetValue(k,0,tiempo[k])
+            self.tableSEEG.SetValue(k,1,signalSEEG[k])
+        
+        self.lineSEEG = self.chartSEEG.AddPlot(vtk.vtkChart.LINE)
+        #line = vtk.vtkPlotLine()
+        self.lineSEEG.SetInput(self.tableSEEG, 0, 1)
+        self.lineSEEG.SetColor(0, 0, 0, 255)
+        self.lineSEEG.SetWidth(1.0)
+        # cambiar el legend de los ejes
+        self.lineSEEG.GetXAxis().SetTitle("Tiempo (s)")
+        self.lineSEEG.GetYAxis().SetTitle("Amplitud")
+        #line.Update()
+        self.chartViewSEEG.addPlot(self.lineSEEG)
+        
+        
     def setupTimer(self):
         self.timer = qt.QTimer()
         self.timer.timeout.connect(self.plotwithTimer)
@@ -179,9 +221,9 @@ class PlotsDaubaraWidget:
                 sim = sim - (self.coeff[i] * self.sim_senal[self.cnt - i - 1])
                 sim = 15 if (sim > 15) else (-15 if sim < - 15 else sim)
         self.sim_senal.append(sim + self.VectorNoise[self.cnt])
-
+        
         # se redimensiona la tabla
-
+        
         for i in range(0, 1001):
             self.table.SetValue(i, 0, i * self.inc)
             self.table.SetValue(i, 1, self.sim_senal[i])
@@ -191,8 +233,93 @@ class PlotsDaubaraWidget:
 
         if self.cnt == 1000:
             self.cnt = 0
+        
+    def leerCoeficientes(self):
+        # cargar los coeficientes
+        aFile = os.path.join(self.scriptedModulesPath,'Datos','Coeficientes','sujeto1_dystonia_gpe.json')
+        bFile = os.path.join(self.scriptedModulesPath,'Datos','Coeficientes','sujeto1_dystonia_gpe_transiente.json')
+        
+        if (os.path.exists(aFile) and os.path.exists(bFile)):
+            ajson = open(aFile)
+            bjson = open(bFile)
+            
+            a = json.load(ajson)
+            b = json.load(bjson)
+            
+            ajson.close()
+            bjson.close()
+        return a,b
+    
+    def simularSeeg(self,coef_AR, orderModel, noise, timeSimul, fs):
+        """
+            signalSimul = simularSeeg(coef_AR, orderModel, noise, timeSimul,fs)
+            Función que genera una señal de EEG a partir de los parámetros de modelo AR
+            Variables de entrada:
+            coef_AR - Parámetros del modelo AR, vector.
+            orderModel - Orden del modelo AR, escalar.
+            noise - Información del ruido del proceso. Si es un escalar
+                        representa la varianza del ruido, si es un vector
+                        corresponde al ruido blanco del proceso. 
+            timeSimul - Tiempo que se simulara la señal EEG en segundos,
+                        # escalar.
+            fs - frecuencia de muestreo de la señal EEG original, escalar.      
+        
+            Variable de salida:
+            signalSimul - Señal EEG simulada, vector.
+        #time - tiempo de simulación de la señal EEG, vector. #deshabilitado
+        """
+        time = numpy.linspace(0,timeSimul,timeSimul*fs)
+        length_time = len(time)
+        whiteNoise = numpy.sqrt(noise)*numpy.random.normal(0,1,length_time)
+            
+        signalSimul = numpy.zeros(length_time)
+            
+        for k in range(length_time):
+            simul = 0
+            for i in range(orderModel):
+                if k > i:
+                    simul = simul - coef_AR[i]*signalSimul[k-i-1]
+            signalSimul[k] = simul + whiteNoise[k]
+        return signalSimul
 
-
+    def simularTotal(self,a,b,tiempoSimulacion=10,EEGSimulTotal=[0]):
+        fs = a["fs"]
+        print(fs)
+        while len(EEGSimulTotal) <= (tiempoSimulacion*fs):
+            #--------------------------------------------------------------------------
+            # simulación segmento corto.
+            segm_EEGsimul= [0]
+            segm_t = (0.2*numpy.random.rand()) + 0.2
+            while (len(segm_EEGsimul) <= (segm_t*fs)):
+                t = (0.003*numpy.random.rand()) + 0.001
+                segm_EEGsimul1 = self.simularSeeg(a["coef_AR"],a["ordenModelo"], a["varianzaRuido"], t, a["fs"])
+                    
+                t = (0.0003 *numpy.random.rand()) + 0.0007
+                segm_EEGsimul2 = self.simularSeeg(b["coef_AR"],b["ordenModelo"], b["varianzaRuido"], t, b["fs"])
+                segm_EEGsimul  = numpy.concatenate((segm_EEGsimul, segm_EEGsimul1, segm_EEGsimul2))
+            #--------------------------------------------------------------------------
+            
+            #--------------------------------------------------------------------------
+            # Simulación segmento largo.
+            timeSimul1 = (0.2 *numpy.random.rand()) + 0.3
+            EEGsimul1 = [0]
+            while (len(EEGsimul1) <= timeSimul1*fs):
+                t = (0.001*numpy.random.rand()) + 0.004
+                EEGsimul_A = self.simularSeeg(a["coef_AR"], a["ordenModelo"],a["varianzaRuido"], t, a["fs"])    
+                if (numpy.random.rand() >= 0.7):
+                    t = (0.0003 * numpy.random.rand()) + 0.0007
+                    segm_EEGsimul_rand = self.simularSeeg(b["coef_AR"],b["ordenModelo"], b["varianzaRuido"], t, b["fs"])
+                    EEGsimul_A = numpy.concatenate((EEGsimul_A,segm_EEGsimul_rand))
+                EEGsimul1 = numpy.concatenate((EEGsimul1,EEGsimul_A))
+            #------------------------------------------------------------------------------------------
+            EEGSimulTotal = numpy.concatenate((EEGSimulTotal,segm_EEGsimul,EEGsimul1))
+        
+        EEGSimulTotal = EEGSimulTotal[0:fs*tiempoSimulacion]
+        tiempoSimul = numpy.linspace(0,((len(EEGSimulTotal)-1)/fs),len(EEGSimulTotal))
+        return EEGSimulTotal,tiempoSimul
+        #print(len(EEGSimulTotal))
+            
+        #tiempoSimul = numpy.linspace(0,((len(EEGSimulTotal)-1)/fs),len(EEGSimulTotal))
 
 ### === Metodos convenientes para leer los widgets === ###
     def get(self, objectName):
