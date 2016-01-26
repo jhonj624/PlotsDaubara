@@ -68,6 +68,8 @@ class PlotsDaubaraWidget:
         self.label.setText(u"Modulo para visualización de señales")
         self.chartViewSEEG = self.get("cv_seeg")
         self.chartViewSEEG.title = 'SEEG'
+        self.chartViewSEEG.setMouseTracking(0)
+        self.chartViewSEEG.setFixedHeight(200)
         self.plotSine()
         self.plotSEEG()
         #self.setupChartView()
@@ -156,7 +158,7 @@ class PlotsDaubaraWidget:
         #line.Update()
         self.chartView.addPlot(self.line)
 
-        self.setupTimer()
+        #self.setupTimer()
         
     def plotSEEG(self):
         
@@ -181,14 +183,14 @@ class PlotsDaubaraWidget:
         
         # Simulación señal EEG.
         self.a,self.b = self.leerCoeficientes()
-        self.signalSEEG, tiempo = self.simularTotal(self.a,self.b,10,[0])
-        y = len(self.signalSEEG)
-##        x = len(tiempo)
-##        print (y,x)
+        self.simularTotal(self.a,self.b,1,[0])
+        y = len(self.EEGSimulTotal)
+        x = len(self.tiempo)
+        #print (y,x)
         self.tableSEEG.SetNumberOfRows(y)
         for k in range(0,y):
-            self.tableSEEG.SetValue(k,0,tiempo[k])
-            self.tableSEEG.SetValue(k,1,self.signalSEEG[k])
+            self.tableSEEG.SetValue(k,0,self.tiempo[k])
+            self.tableSEEG.SetValue(k,1,self.EEGSimulTotal[k])
         
         self.lineSEEG = self.chartSEEG.AddPlot(vtk.vtkChart.LINE)
         #line = vtk.vtkPlotLine()
@@ -205,7 +207,7 @@ class PlotsDaubaraWidget:
     def setupTimerSEEG(self):
         self.timerSEEG = qt.QTimer()
         self.timerSEEG.timeout.connect(self.plotSEEGDynamic)
-        self.timerSEEG.setInterval(10000)
+        self.timerSEEG.setInterval(5000)
         self.timerSEEG.start()
         
     def plotSEEGDynamic(self):
@@ -213,7 +215,10 @@ class PlotsDaubaraWidget:
         # Simulación señal EEG.
         self.chartSEEG.RemovePlot(0)
         #borra
-        self.signalSEEG, tiempo = self.simularTotal(self.a,self.b,10,[0])
+        t0 = time.clock()
+        self.simularTotal(self.a,self.b,1,[0])
+        t1 = time.clock()-t0
+        #print t1
         #self.signalSEEG = numpy.random.normal(0,1.0,220500)
         
         
@@ -227,13 +232,13 @@ class PlotsDaubaraWidget:
 ##            self.tableSEEG.SetValue(k,1,numpy.random.rand())
 ##        self.ce += 22050
 
-        y = len(self.signalSEEG)
+        y = len(self.EEGSimulTotal)
 ##        x = len(tiempo)
 ##        print (y,x)
 
         for k in range(0,y):
-            self.tableSEEG.SetValue(k,0,tiempo[k])
-            self.tableSEEG.SetValue(k,1,self.signalSEEG[k])
+            self.tableSEEG.SetValue(k,0,self.tiempo[k])
+            self.tableSEEG.SetValue(k,1,self.EEGSimulTotal[k])
 
         line = self.chartSEEG.AddPlot(0)
         line.SetWidth(0.5)
@@ -322,7 +327,6 @@ class PlotsDaubaraWidget:
 
     def simularTotal(self,a,b,tiempoSimulacion=10,EEGSimulTotal=[0]):
         fs = a["fs"]
-        print(fs)
         while len(EEGSimulTotal) <= (tiempoSimulacion*fs):
             #--------------------------------------------------------------------------
             # simulación segmento corto.
@@ -352,9 +356,9 @@ class PlotsDaubaraWidget:
             #------------------------------------------------------------------------------------------
             EEGSimulTotal = numpy.concatenate((EEGSimulTotal,segm_EEGsimul,EEGsimul1))
         
-        EEGSimulTotal = EEGSimulTotal[0:fs*tiempoSimulacion]
-        tiempoSimul = numpy.linspace(0,((len(EEGSimulTotal)-1)/fs),len(EEGSimulTotal))
-        return EEGSimulTotal,tiempoSimul
+        self.EEGSimulTotal = EEGSimulTotal[0:fs*tiempoSimulacion]
+        self.tiempo = numpy.linspace(0,(len(EEGSimulTotal)/fs),len(EEGSimulTotal))
+        #return EEGSimulTotal,tiempoSimul
         #print(len(EEGSimulTotal))
             
         #tiempoSimul = numpy.linspace(0,((len(EEGSimulTotal)-1)/fs),len(EEGSimulTotal))
